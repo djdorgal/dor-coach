@@ -1,15 +1,18 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
 /* ---------- plan data ---------- */
-const TARGET = { kcal: 2000, protein: 150 };
+// Base: Racheli Stern's personal menu (clinical dietitian, 2/2023) — ~1,850 kcal, 4 meals.
+const TARGET = { kcal: 1850, protein: 120 };
+const DRINKS_WEEK = 2; // dietitian's limit
 
 const FOOD_CATS = [
   { id: "fav", n: "מועדפים" },
+  { id: "menu", n: "התפריט של רחלי" },
   { id: "home", n: "אוכל בית" },
   { id: "prot", n: "חלבון ונשנוש" },
   { id: "eve", n: "ערב בבית" },
@@ -18,6 +21,13 @@ const FOOD_CATS = [
   { id: "sweet", n: "קפה ומתוק" }
 ];
 const FOODS = [
+  { c: "menu", n: "צהריים 13:00: חלבון + פחמימה + 3–4 מנות ירקות", k: 700, p: 50 },
+  { c: "menu", n: "ביניים 17:00: 2 פרוסות לחם מלא + חלבון + שומן + ירקות", k: 330, p: 18 },
+  { c: "menu", n: "ביניים 17:00: 2 פרוסות לחם מלא + כף חמאת בוטנים", k: 300, p: 11 },
+  { c: "menu", n: "ערב 21:00: לחמנייה / 2 פרוסות + 3 מנות חלבון + ירקות + כפית שמן זית", k: 550, p: 30 },
+  { c: "menu", n: "לילה: במבה (50 ג׳)", k: 250, p: 8 },
+  { c: "menu", n: "לילה: 1.5 כוס דגני בוקר + ¾ כוס חלב", k: 250, p: 9 },
+  { c: "menu", n: "סקופ חלבון במים (3 פעמים בשבוע)", k: 120, p: 24 },
   { c: "home", n: "צלחת עוף / בשר + אורז + סלט", k: 700, p: 50 },
   { c: "home", n: "צלחת עוף + ירקות, בלי פחמימה", k: 450, p: 45 },
   { c: "home", n: "קציצות ברוטב (3) + כוס אורז", k: 650, p: 35 },
@@ -80,18 +90,18 @@ const EX = {
 
 const SCHED = {
   event: [
-    { id: "coffee", when: "בוקר", w: "רק קפה. רוצה? חלב חלבון בקפה.", from: 5, to: 13 },
-    { id: "meal1", when: "13:00–15:00", w: "ארוחת בית: חצי ירקות, רבע חלבון (כ-200 ג׳), רבע פחמימה.", from: 13, to: 15 },
-    { id: "snack", when: "17:00–18:00", w: "נשנוש חלבון לפני יציאה: יוגורט חלבון / קוטג׳ + פרי.", from: 15, to: 18 },
-    { id: "plate", when: "עד 22:00", w: "באירוע: צלחת אחת — חלבון צלוי + סלטים. בלי קינוחים.", from: 18, to: 22 },
-    { id: "closed", when: "אחרי", w: "חוזרים הביתה: מטבח סגור. רעב אמיתי — קוטג׳ או יוגורט חלבון.", from: 22, to: 29 }
+    { id: "coffee", when: "בוקר", w: "רק קפה.", from: 5, to: 13 },
+    { id: "meal1", when: "13:00", w: "צהריים (700): 200 ג׳ עוף / 4 קציצות / 250 ג׳ דג / 180 ג׳ בקר + 8 כפות בורגול / קינואה או 180 ג׳ אורז / פסטה + 3–4 מנות ירקות.", from: 13, to: 15 },
+    { id: "snack", when: "17:00", w: "ביניים (300–350) לפני יציאה: 2 פרוסות לחם מלא + חלבון + שומן + ירקות, או + כף חמאת בוטנים.", from: 15, to: 18 },
+    { id: "plate", when: "באירוע", w: "זו ארוחת הערב (550): צלחת אחת — חלבון צלוי + סלטים, בלי לחם נוסף ובלי קינוחים.", from: 18, to: 22.5 },
+    { id: "night", when: "בבית", w: "ארוחת הלילה (250): במבה 50 ג׳ או דגני בוקר + חלב — וזהו, המטבח נסגר.", from: 22.5, to: 29 }
   ],
   regular: [
-    { id: "coffee", when: "בוקר", w: "רק קפה. רוצה? חלב חלבון בקפה.", from: 5, to: 13 },
-    { id: "meal1", when: "13:00–15:00", w: "ארוחת בית: חצי ירקות, רבע חלבון (כ-200 ג׳), רבע פחמימה.", from: 13, to: 15 },
-    { id: "snack", when: "17:00–18:00", w: "נשנוש חלבון: יוגורט חלבון / קוטג׳ + פרי.", from: 15, to: 18.5 },
-    { id: "dinner", when: "19:30–20:30", w: "ערב: חביתה / שקשוקה / טונה + סלט גדול + 1–2 פרוסות לחם מלא.", from: 18.5, to: 21 },
-    { id: "closed", when: "אחרי", w: "אחרי ארוחת הערב: מטבח סגור. מים, סודה, תה.", from: 21, to: 29 }
+    { id: "coffee", when: "בוקר", w: "רק קפה.", from: 5, to: 13 },
+    { id: "meal1", when: "13:00", w: "צהריים (700): 200 ג׳ עוף / 4 קציצות / 250 ג׳ דג / 180 ג׳ בקר + 8 כפות בורגול / קינואה או 180 ג׳ אורז / פסטה + 3–4 מנות ירקות.", from: 13, to: 15 },
+    { id: "snack", when: "17:00", w: "ביניים (300–350): 2 פרוסות לחם מלא + חלבון + שומן + ירקות, או + כף חמאת בוטנים.", from: 15, to: 19.5 },
+    { id: "dinner", when: "21:00", w: "ערב (550): לחמנייה או 2 פרוסות לחם מלא + 3 מנות חלבון (ביצה / חצי טונה / גבינה 5% / פסטרמה) + ירקות + כפית שמן זית.", from: 19.5, to: 22.5 },
+    { id: "night", when: "לילה", w: "ארוחת הלילה (250): במבה 50 ג׳ או דגני בוקר + חלב — וזהו, המטבח נסגר.", from: 22.5, to: 29 }
   ]
 };
 
@@ -124,7 +134,7 @@ function toast(msg, actLabel, act) {
 }
 
 /* ---------- state + storage ---------- */
-const S = { profile: null, weights: {}, days: {}, favs: [], lastBackup: null, ui: { tab: "today", cat: "home", pick: null, installHidden: false } };
+const S = { profile: null, weights: {}, days: {}, favs: [], lastBackup: null, ui: { tab: "today", cat: "menu", pick: null, installHidden: false } };
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -161,35 +171,36 @@ function goalRange() { const s = P().startWeight; return s ? [Math.round(s * 0.9
 /* ---------- "what now" engine ---------- */
 function nowAdvice() {
   const d = day(), t = totals(d), h = nowHour(), ev = d.type === "event";
-  const protLeft = Math.max(0, TARGET.protein - t.prot), kcalLeft = TARGET.kcal - t.kcal;
+  const kcalLeft = TARGET.kcal - t.kcal;
   const wd = weekDrinks(), tonight = (d.drinks || []).length;
   const tw = workoutsThisWeek(), target = seasonTarget();
   const dow = parseKey(today()).getDay(), daysLeft = 6 - dow + 1;
+  const drinksLeft = Math.max(0, DRINKS_WEEK - wd.total);
   let label = "עכשיו", tip = "", sub = "";
   if (h < 13) {
     label = "בוקר";
-    tip = "רק קפה. הארוחה הראשונה ב-13:00–15:00.";
-    if (!(d.workout && d.workout.done) && tw < target && target - tw >= daysLeft - 1) sub = `חסרים ${target - tw} אימונים השבוע ונשארו ${daysLeft} ימים — היום יום טוב לאימון, לפני הארוחה או שעתיים אחריה.`;
-    else sub = ev ? "ערב אירוע היום. תכנן את ארוחת הצהריים כארוחה הגדולה." : "";
+    tip = "רק קפה. ארוחת הצהריים ב-13:00.";
+    if (!(d.workout && d.workout.done) && tw < target && target - tw >= daysLeft - 1) sub = `חסרים ${target - tw} אימונים השבוע ונשארו ${daysLeft} ימים — היום יום טוב לאימון, לפני הצהריים או שעתיים אחרי.`;
+    else if (ev) sub = "ערב אירוע היום. הצהריים והביניים כרגיל — הם מה ששומר עליך שם.";
   } else if (h < 15) {
     label = "צהריים";
-    tip = t.kcal < 300 ? "זמן לארוחה הראשונה: חצי צלחת ירקות, רבע חלבון, רבע פחמימה." : "ארוחה ראשונה נרשמה. הבא: נשנוש חלבון ב-17:00–18:00.";
-    sub = `חלבון עד עכשיו: ${t.prot} ג׳ מתוך ${TARGET.protein}.`;
-  } else if (h < (ev ? 18 : 18.5)) {
+    tip = t.kcal < 300 ? "ארוחת צהריים לפי התפריט: מנת חלבון + פחמימה + 3–4 מנות ירקות." : "הצהריים נרשמו. הבא: ביניים ב-17:00.";
+  } else if (h < (ev ? 18 : 19.5)) {
     label = "אחר הצהריים";
-    tip = protLeft > 60 ? `חסרים ${protLeft} ג׳ חלבון. נשנוש חלבון עכשיו — יוגורט חלבון או קוטג׳.` : "נשנוש חלבון קטן ושתייה. אתה בכיוון טוב.";
-    sub = ev ? "לא יוצאים לאירוע רעבים — זה מה ששומר עליך שם." : "";
-  } else if (ev && h < 22) {
+    tip = "ביניים ב-17:00: 2 פרוסות לחם מלא + חלבון + ירקות, או + כף חמאת בוטנים.";
+    if (ev) sub = "לא יוצאים לאירוע רעבים.";
+  } else if (ev && h < 22.5) {
     label = "באירוע";
-    tip = "צלחת אחת: חלבון צלוי + סלטים. קבלת פנים — כוס ביד, לא ביסים.";
-    sub = wd.nights >= 2 && tonight === 0 ? "כבר היו 2 ערבי שתייה השבוע — הערב רק מים, סודה, קולה זירו." : tonight >= 2 ? "2 משקאות הערב — זה הגבול. מכאן מים." : `נשארו ${Math.max(0, 4 - wd.total)} משקאות השבוע. אם שותים — אחרי שאכלת, ומים בין משקה למשקה.`;
-  } else if (!ev && h < 21) {
+    tip = "זו ארוחת הערב: צלחת אחת — חלבון צלוי + סלטים. קבלת פנים — כוס ביד, לא ביסים.";
+    sub = tonight >= 2 || wd.total >= DRINKS_WEEK ? "הגעת לגבול השתייה של השבוע. מכאן מים, סודה, קולה זירו." : `נשארו ${drinksLeft} משקאות השבוע. אם שותים — אחרי שאכלת, ומים בין משקה למשקה.`;
+  } else if (!ev && h < 22.5) {
     label = "ערב";
-    tip = kcalLeft > 400 ? `נשארו כ-${kcalLeft} קק״ל. ארוחת ערב: ביצים / טונה + סלט גדול + לחם מלא.` : "התקציב היומי כמעט מלא. ערב קליל: סלט גדול + טונה או ביצים.";
-    sub = protLeft > 0 ? `עוד ${protLeft} ג׳ חלבון ליעד.` : "יעד החלבון הושג.";
+    tip = "ארוחת ערב ב-21:00: לחמנייה או 2 פרוסות + 3 מנות חלבון + ירקות + כפית שמן זית.";
+    sub = kcalLeft > 0 ? `נשארו כ-${kcalLeft} קק״ל להיום, כולל ארוחת הלילה.` : "התקציב היומי מלא — ארוחת הלילה קטנה או בכלל לא.";
   } else {
     label = ev ? "אחרי האירוע" : "לילה";
-    tip = "מטבח סגור. רעב אמיתי — קוטג׳ או יוגורט חלבון, ומצחצחים שיניים.";
+    const hadNight = (d.checks || {}).night;
+    tip = hadNight ? "המטבח סגור. מצחצחים שיניים." : "ארוחת לילה (250): במבה 50 ג׳ או דגני בוקר + חלב. אחריה המטבח נסגר.";
     sub = t.kcal ? `היום: ${t.kcal.toLocaleString("en-US")} קק״ל, ${t.prot} ג׳ חלבון.` : "";
   }
   return { label, tip, sub };
@@ -229,7 +240,7 @@ function renderToday() {
       <button class="iconbtn" type="button" data-del-meal="${i}" aria-label="מחק">×</button></li>`).join("");
   $("#mealEmpty").hidden = (d.meals || []).length > 0;
 
-  if (S.ui.cat === "fav" && !S.favs.length) S.ui.cat = "home";
+  if (S.ui.cat === "fav" && !S.favs.length) S.ui.cat = "menu";
   $("#cats").innerHTML = FOOD_CATS.filter(c => c.id !== "fav" || S.favs.length).map(c => `<button type="button" data-cat="${c.id}" aria-pressed="${S.ui.cat === c.id}">${c.n}</button>`).join("");
   $("#foods").innerHTML = foodsFor(S.ui.cat).map((f, i) => `
     <button type="button" class="food ${f.fav ? "fav" : ""}" data-food="${i}">
@@ -248,12 +259,11 @@ function renderToday() {
 
   const wd = weekDrinks(k), tonight = (d.drinks || []).length;
   $("#drinkTonight").textContent = tonight;
-  $("#pips").innerHTML = Array.from({ length: Math.max(4, wd.total) }, (_, i) => `<span class="pip ${i < wd.total ? (i >= 4 ? "over" : "on") : ""}"></span>`).join("");
-  let chip = ["good", "בתוך המודל"], msg;
-  if (wd.total > 4 || tonight > 2 || wd.nights > 2) { chip = ["bad", "מעבר למודל"]; msg = tonight > 2 ? "עברת 2 משקאות הערב. מכאן רק מים או סודה." : wd.total > 4 ? "עברת את 4 המשקאות של השבוע. עד ראשון — בלי אלכוהול." : "זה הערב השלישי עם שתייה השבוע. מכאן עד ראשון בלי."; }
-  else if (wd.total === 4 || tonight === 2) { chip = ["warn", "הגעת לגבול"]; msg = tonight === 2 ? "2 משקאות הערב — זה הגבול. מכאן מים, סודה, קולה זירו." : "4 משקאות השבוע — זה הגבול עד ראשון."; }
-  else if (tonight === 0) msg = wd.nights >= 2 ? "כבר היו 2 ערבי שתייה השבוע — הערב בלי." : `נשארו ${4 - wd.total} משקאות השבוע, בעד ${Math.max(0, 2 - wd.nights)} ערבים. אם שותים — רק אחרי שאכלת.`;
-  else msg = "כוס מים בין משקה למשקה, ולא אחרי חצות. בבית — מטבח סגור.";
+  $("#pips").innerHTML = Array.from({ length: Math.max(DRINKS_WEEK, wd.total) }, (_, i) => `<span class="pip ${i < wd.total ? (i >= DRINKS_WEEK ? "over" : "on") : ""}"></span>`).join("");
+  let chip = ["good", "בתוך המגבלה"], msg;
+  if (wd.total > DRINKS_WEEK) { chip = ["bad", "מעבר למגבלה"]; msg = "עברת את 2 המשקאות של השבוע. עד ראשון — בלי אלכוהול."; }
+  else if (wd.total === DRINKS_WEEK) { chip = ["warn", "הגעת לגבול"]; msg = "2 משקאות השבוע — זה הגבול עד ראשון. מכאן מים, סודה, קולה זירו."; }
+  else msg = `נשארו ${DRINKS_WEEK - wd.total} משקאות השבוע. אם שותים — רק אחרי שאכלת, ומים בין משקה למשקה.`;
   $("#drinkChip").className = "chip " + chip[0]; $("#drinkChip").textContent = chip[1];
   $("#drinkMsg").textContent = msg; $("#drinkUndo").disabled = tonight === 0;
 
@@ -344,7 +354,7 @@ function renderWeek() {
     ["אימונים", `${tw}/${target}`, tw >= target ? "good" : tw >= target - 1 ? "warn" : "plain"],
     ["ימים עם חלבון ביעד", `${protDays}`, protDays >= 4 ? "good" : "plain"],
     ["ממוצע קלוריות בימים שנרשמו", logged ? Math.round(kcalSum / logged).toLocaleString("en-US") : "—", logged && kcalSum / logged <= TARGET.kcal * 1.05 ? "good" : "plain"],
-    ["משקאות / ערבי שתייה", `${wd.total} / ${wd.nights}`, wd.total > 4 || wd.nights > 2 ? "bad" : wd.total === 4 ? "warn" : "good"]
+    ["משקאות (עד 2)", `${wd.total}`, wd.total > DRINKS_WEEK ? "bad" : wd.total === DRINKS_WEEK ? "warn" : "good"]
   ];
   $("#weekStats").innerHTML = rows.map(([n, v, c]) => `<li><span>${n}</span><span class="chip ${c}"><span class="num">${v}</span></span></li>`).join("");
   $("#lastBackup").textContent = S.lastBackup ? `גיבוי אחרון: ${fmtLong(S.lastBackup)}` : "עוד לא נשמר גיבוי.";
