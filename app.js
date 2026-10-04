@@ -1,7 +1,7 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
@@ -9,6 +9,10 @@ const DAY_START = 5; // the day flips at 05:00
 // Base: Racheli Stern's personal menu (clinical dietitian, 2/2023) — ~1,850 kcal, 4 meals.
 const TARGET = { kcal: 1850, protein: 120 };
 const DRINKS_WEEK = 2; // dietitian's limit
+const BODY = { sex: "m", birth: "1993-12-16", heightCm: 172 };
+const KCAL_PER_KG = 7700;     // energy in ~1 kg of body fat
+const BREAK_AT_WEEK = 12;     // suggest a 2-week maintenance break after ~12 weeks
+const STEP_KG = 5;            // re-check the target every 5 kg lost
 
 const FOOD_CATS = [
   { id: "fav", n: "מועדפים" },
@@ -179,12 +183,47 @@ function nextWorkoutType() { if (isFBPhase()) return "FB"; const l = lastDoneWor
 function weightEntries() { return Object.entries(S.weights).map(([k, v]) => ({ k, v: +v })).filter(e => e.v > 0).sort((a, b) => a.k < b.k ? -1 : 1); }
 function avg7(es, upto) { const from = addDays(upto, -6); const xs = es.filter(e => e.k >= from && e.k <= upto); return xs.length ? xs.reduce((s, e) => s + e.v, 0) / xs.length : null; }
 function programWeek() { return Math.max(1, Math.floor(daysBetween(P().startDate, today()) / 7) + 1); }
+/* ---------- energy: estimate, measured, break ---------- */
+function ageYears() { const b = parseKey(BODY.birth), t = parseKey(today()); let y = t.getFullYear() - b.getFullYear(); if (t < new Date(t.getFullYear(), b.getMonth(), b.getDate(), 12)) y--; return y; }
+function currentWeight() { const es = weightEntries(); if (!es.length) return P().startWeight; const l = es[es.length - 1]; return avg7(es, l.k) || l.v; }
+// Mifflin-St Jeor BMR × activity range for a DJ on his feet at events + 3 gym sessions (≈1.375–1.5)
+function estimatedTDEE(w = currentWeight()) {
+  if (!w) return null;
+  const bmr = 10 * w + 6.25 * BODY.heightCm - 5 * ageYears() + 5;
+  return { bmr: Math.round(bmr), low: Math.round(bmr * 1.375 / 10) * 10, high: Math.round(bmr * 1.5 / 10) * 10 };
+}
+// Measured TDEE: average logged intake + energy of the weight trend change, over the last up-to-28 days.
+function measuredTDEE() {
+  const es = weightEntries(); if (es.length < 2) return null;
+  const end = today(), start = addDays(end, -27);
+  const days = []; for (let k = start; k <= end; k = addDays(k, 1)) { const d = S.days[k]; const t = d ? totals(d) : null; if (t && t.kcal >= 800) days.push(t.kcal); }
+  const inWin = es.filter(e => e.k >= start);
+  if (inWin.length < 4) return null;
+  const first = inWin[0].k, last = inWin[inWin.length - 1].k, span = daysBetween(first, last);
+  if (span < 20 || days.length < 14) return { ready: false, loggedDays: days.length, span };
+  // two 7-day averages, centred 3 days in from each end -> they sit (span - 6) days apart
+  const w0 = avg7(es, addDays(first, 6)), w1 = avg7(es, last), gapDays = span - 6;
+  const avgIn = days.reduce((s, x) => s + x, 0) / days.length;
+  const tdee = Math.round((avgIn + ((w0 - w1) * KCAL_PER_KG) / gapDays) / 10) * 10;
+  return { ready: true, tdee, avgIn: Math.round(avgIn), perWeek: Math.round((w0 - w1) / gapDays * 7 * 10) / 10, loggedDays: days.length, span };
+}
+function inBreak() { const b = P().breakUntil; return !!(b && today() <= b); }
+function maintenanceKcal() {
+  const e = estimatedTDEE(), m = measuredTDEE();
+  const est = e ? (e.low + e.high) / 2 : 2600;
+  // trust the measured value, but keep it within a sane band around the formula (bad logging can skew it)
+  const v = m && m.ready && e ? Math.min(e.high, Math.max(e.low * 0.9, m.tdee)) : est;
+  return Math.round(v / 50) * 50;
+}
+function kcalGoal() { return inBreak() ? maintenanceKcal() : TARGET.kcal; }
+function kgLost() { const s = P().startWeight, w = currentWeight(); return s && w ? s - w : 0; }
+
 function goalRange() { const s = P().startWeight; return s ? [Math.round(s * 0.90 * 10) / 10, Math.round(s * 0.93 * 10) / 10] : null; }
 
 /* ---------- "what now" engine ---------- */
 function nowAdvice() {
   const d = day(), t = totals(d), h = nowHour(), ev = d.type === "event";
-  const kcalLeft = TARGET.kcal - t.kcal;
+  const kcalLeft = kcalGoal() - t.kcal;
   const wd = weekDrinks(), tonight = (d.drinks || []).length;
   const tw = workoutsThisWeek(), target = seasonTarget();
   const dow = parseKey(today()).getDay(), daysLeft = 6 - dow + 1;
@@ -243,9 +282,9 @@ function renderToday() {
   $("#nowLabel").textContent = a.label; $("#nowTip").textContent = a.tip; $("#nowSub").textContent = a.sub; $("#nowSub").hidden = !a.sub;
 
   $("#protNow").textContent = t.prot; $("#protGoal").textContent = TARGET.protein;
-  $("#kcalNow").textContent = t.kcal.toLocaleString("en-US"); $("#kcalGoal").textContent = TARGET.kcal.toLocaleString("en-US");
+  $("#kcalNow").textContent = t.kcal.toLocaleString("en-US"); $("#kcalGoal").textContent = kcalGoal().toLocaleString("en-US");
   setBar("#protBar", t.prot, TARGET.protein, t.prot >= TARGET.protein ? "good" : "");
-  setBar("#kcalBar", t.kcal, TARGET.kcal, t.kcal > TARGET.kcal * 1.1 ? "bad" : t.kcal > TARGET.kcal ? "warn" : "good");
+  setBar("#kcalBar", t.kcal, kcalGoal(), t.kcal > kcalGoal() * 1.1 ? "bad" : t.kcal > kcalGoal() ? "warn" : "good");
 
   $("#mealList").innerHTML = (d.meals || []).map((m, i) => `
     <li><span class="t num">${esc(m.time)}</span>
@@ -370,11 +409,44 @@ function renderWeek() {
   const rows = [
     ["אימונים", `${tw}/${target}`, tw >= target ? "good" : tw >= target - 1 ? "warn" : "plain"],
     ["ימים עם חלבון ביעד", `${protDays}`, protDays >= 4 ? "good" : "plain"],
-    ["ממוצע קלוריות בימים שנרשמו", logged ? Math.round(kcalSum / logged).toLocaleString("en-US") : "—", logged && kcalSum / logged <= TARGET.kcal * 1.05 ? "good" : "plain"],
+    ["ממוצע קלוריות בימים שנרשמו", logged ? Math.round(kcalSum / logged).toLocaleString("en-US") : "—", logged && kcalSum / logged <= kcalGoal() * 1.05 ? "good" : "plain"],
     ["משקאות (עד 2)", `${wd.total}`, wd.total > DRINKS_WEEK ? "bad" : wd.total === DRINKS_WEEK ? "warn" : "good"]
   ];
   $("#weekStats").innerHTML = rows.map(([n, v, c]) => `<li><span>${n}</span><span class="chip ${c}"><span class="num">${v}</span></span></li>`).join("");
+  renderEnergy();
   $("#lastBackup").textContent = S.lastBackup ? `גיבוי אחרון: ${fmtLong(S.lastBackup)}` : "עוד לא נשמר גיבוי.";
+}
+
+function renderEnergy() {
+  const e = estimatedTDEE(), m = measuredTDEE(), wk = programWeek();
+  let html = "";
+  if (m && m.ready) {
+    html += `<p><strong>לפי הנתונים שלך: כ-<span class="num">${m.tdee.toLocaleString("en-US")}</span> קק״ל ביום.</strong></p>
+      <p class="small muted">ב-${m.span} הימים האחרונים אכלת בממוצע <span class="num">${m.avgIn.toLocaleString("en-US")}</span> קק״ל (${m.loggedDays} ימים רשומים) והממוצע שלך ירד <span class="num">${m.perWeek}</span> ק״ג לשבוע.</p>`;
+    const gap = m.tdee - TARGET.kcal;
+    html += `<p class="small">${m.perWeek > 1.1 ? "יורד מהר מהיעד (מעל 1 ק״ג בשבוע). אם אתה חלש או רעב כל הזמן — שווה לבדוק עם רחלי העלאה קטנה." : m.perWeek < 0.3 ? "הירידה איטית מהיעד. קודם לבדוק שהרישום מלא (גם שתייה ונשנושים), ורק אז לשנות." : `קצב טוב. הגירעון שלך כ-${gap.toLocaleString("en-US")} קק״ל ביום.`}</p>`;
+  } else if (e) {
+    html += `<p><strong>הערכה: <span class="num">${e.low.toLocaleString("en-US")}–${e.high.toLocaleString("en-US")}</span> קק״ל ביום.</strong></p>
+      <p class="small muted">לפי נוסחה (שריפה במנוחה כ-<span class="num">${e.bmr.toLocaleString("en-US")}</span> × פעילות). ${m ? `אחרי 3 שבועות עם 14 ימים רשומים יופיע כאן חישוב מהנתונים שלך — עכשיו ${m.loggedDays} ימים.` : "אחרי 3 שבועות של רישום ושקילות יופיע כאן חישוב מהנתונים שלך."}</p>`;
+  }
+  $("#energyBody").innerHTML = html;
+
+  // diet break
+  const box = $("#breakBox");
+  if (inBreak()) {
+    box.hidden = false;
+    box.innerHTML = `<strong>שבועיים תחזוקה — עד ${fmtLong(P().breakUntil)}</strong><span>היעד היומי עכשיו <span class="num">${kcalGoal().toLocaleString("en-US")}</span> קק״ל. ממשיכים לרשום, להתאמן ולשמור על 2 משקאות בשבוע.</span><button class="btn ghost sm" type="button" id="breakEnd" style="align-self:flex-start">לחזור לגירעון עכשיו</button>`;
+  } else if (wk >= BREAK_AT_WEEK && !P().breakDone) {
+    box.hidden = false;
+    box.innerHTML = `<strong>${wk} שבועות בגירעון — אפשר לקחת שבועיים תחזוקה</strong><span>שבועיים שאוכלים בגובה התחזוקה (כ-<span class="num">${maintenanceKcal().toLocaleString("en-US")}</span> קק״ל) נותנים לגוף ולראש מנוחה, ואחר כך חוזרים לתפריט. כדאי לתאם עם רחלי.</span><div class="row"><button class="btn sm" type="button" id="breakStart">להתחיל שבועיים תחזוקה</button><button class="btn ghost sm" type="button" id="breakSkip">לא עכשיו</button></div>`;
+  } else box.hidden = true;
+}
+function renderStepAlert() {
+  const lost = kgLost(), step = Math.floor(lost / STEP_KG) * STEP_KG, b = $("#stepAlert");
+  if (step >= STEP_KG && (P().ackStep || 0) < step) {
+    b.hidden = false;
+    $("#stepTxt").textContent = `ירדת ${step} ק״ג מההתחלה. בגוף קל יותר שורפים פחות, אז אותו תפריט נותן גירעון קטן יותר — זה זמן טוב לבדוק את היעד עם רחלי.`;
+  } else b.hidden = true;
 }
 
 function render() {
@@ -382,7 +454,7 @@ function render() {
   const t = S.ui.tab;
   ["today", "weight", "train", "week"].forEach(x => $("#tab-" + x).hidden = x !== t);
   document.querySelectorAll(".tabs button").forEach(b => b.dataset.tab === t ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
-  if (t === "today") renderToday();
+  if (t === "today") { renderToday(); renderStepAlert(); }
   if (t === "weight") renderWeight();
   if (t === "train") renderTrain();
   if (t === "week") renderWeek();
@@ -452,11 +524,18 @@ $("#exList").addEventListener("input", e => {
 $("#trFinish").addEventListener("click", () => { const w = ensureWorkout(S.ui.pick); w.done = true; save(true); render(); toast("אימון נרשם."); });
 $("#trUndo").addEventListener("click", () => { const d = day(); if (d.workout) { d.workout.done = false; save(); render(); } });
 
+$("#stepOk").addEventListener("click", () => { S.profile.ackStep = Math.floor(kgLost() / STEP_KG) * STEP_KG; save(); render(); });
+$("#breakBox").addEventListener("click", e => {
+  if (e.target.id === "breakStart") { S.profile.breakUntil = addDays(today(), 13); save(true); render(); toast("שבועיים תחזוקה התחילו."); }
+  if (e.target.id === "breakSkip") { S.profile.breakDone = true; save(); render(); }
+  if (e.target.id === "breakEnd") { S.profile.breakUntil = addDays(today(), -1); S.profile.breakDone = true; save(); render(); }
+});
 /* summary for Claude */
 function summaryText() {
   const es = weightEntries(), last = es[es.length - 1];
   const lines = [`סיכום מהאפליקציה "המאמן של דור" (${fmtLong(today())}):`,
     `משקל התחלתי ${P().startWeight ?? "—"} (${P().startDate}), אחרון ${last ? fmt1(last.v) + " (" + last.k + ")" : "—"}, ממוצע 7 ימים ${last ? fmt1(avg7(es, last.k)) : "—"}.`,
+    `תחזוקה: ${(() => { const m = measuredTDEE(); if (m && m.ready) return `כ-${m.tdee} קק״ל לפי הנתונים`; const e = estimatedTDEE(); return e ? `הערכה ${e.low}–${e.high} קק״ל` : "—"; })()}${inBreak() ? ` (בהפסקת תחזוקה עד ${P().breakUntil})` : ""}.`,
     `השבוע: ${workoutsThisWeek()}/${seasonTarget()} אימונים, ${weekDrinks().total} משקאות ב-${weekDrinks().nights} ערבים.`, "", "14 ימים אחרונים:"];
   for (let i = 13; i >= 0; i--) {
     const k = addDays(today(), -i), d = S.days[k]; if (!d) continue;

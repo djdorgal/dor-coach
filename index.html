@@ -190,6 +190,11 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 
   <!-- TODAY -->
   <section id="tab-today" class="wrap" style="padding:0">
+    <div class="banner" id="stepAlert" hidden>
+      <strong>זמן לבדוק את היעד</strong>
+      <span id="stepTxt"></span>
+      <button class="btn ghost sm" type="button" id="stepOk" style="align-self:flex-start">הבנתי</button>
+    </div>
     <div class="card now-card">
       <span class="eyebrow" id="nowLabel">עכשיו</span>
       <p class="tipline" id="nowTip"></p>
@@ -321,6 +326,11 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
       <div class="week" id="weekGrid"></div>
       <div class="legend"><span><i class="dot g"></i>חלבון ביעד</span><span><i class="dot b"></i>אימון</span><span><i class="dot a"></i>שתייה</span></div>
       <ul class="milestones" id="weekStats"></ul>
+    </div>
+    <div class="card">
+      <h2 class="h2">כמה אתה שורף ביום</h2>
+      <div id="energyBody" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div class="banner" id="breakBox" hidden></div>
     </div>
     <div class="card">
       <h2 class="h2">להתייעץ עם Claude</h2>
