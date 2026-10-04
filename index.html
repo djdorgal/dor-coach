@@ -295,12 +295,12 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
   <section id="tab-train" class="wrap" style="padding:0" hidden>
     <div class="card">
       <div class="card-h"><h2 id="trTitle">אימון A</h2><span class="chip" id="trWeek"></span></div>
-      <div class="seg" role="group" aria-label="איזה אימון" style="margin:0">
+      <div class="seg" id="trPicker" role="group" aria-label="איזה אימון" style="margin:0">
         <button type="button" id="pickA" aria-pressed="true">אימון A</button>
         <button type="button" id="pickB" aria-pressed="false">אימון B</button>
       </div>
       <p class="small muted" id="trPhase"></p>
-      <p class="small">חימום: 5–8 דקות אופניים או הליכה, וסט קל בתרגיל הראשון. מנוחה: 60–90 שניות. שבוע עמוס? שלושת התרגילים המסומנים בכחול (כ-25 דקות) נחשבים אימון.</p>
+      <p class="small">חימום: 5–8 דקות הליכה, וסט קל בתרגיל הראשון. מנוחה: 60–90 שניות. שבוע עמוס? שלושת התרגילים המסומנים בכחול (כ-25 דקות) נחשבים אימון.</p>
       <div id="exList" style="display:flex;flex-direction:column;gap:10px"></div>
       <div class="done-banner" id="trDone" hidden>האימון של היום נרשם.</div>
       <div class="row">
@@ -337,7 +337,7 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
         <li>ערב 21:00 (550): לחמנייה / 2 פרוסות + 3 מנות חלבון + ירקות + כפית שמן זית. ביום אירוע — הצלחת באירוע היא ארוחת הערב.</li>
         <li>לילה (250): במבה 50 ג׳ או דגני בוקר + חלב — ואחרי זה המטבח סגור.</li>
         <li>אלכוהול: עד 2 משקאות בשבוע. סקופ חלבון במים — עד 3 פעמים בשבוע.</li>
-        <li>אימונים: 3 בשבוע (4 בדצמבר–פברואר), A ו-B לסירוגין. בלי ריצה — הליכה ואופניים.</li>
+        <li>אימונים: 3 בשבוע (4 בדצמבר–פברואר), רק מכונות. חודש ראשון גוף מלא, אחר כך A ו-B לסירוגין. בלי ריצה — הליכה.</li>
         <li>מפספסים? לא פעמיים ברצף. חוזרים לתוכנית בארוחה או באימון הבאים.</li>
       </ol>
     </div>

@@ -1,7 +1,7 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
@@ -67,24 +67,36 @@ const FOODS = [
   { c: "sweet", n: "גלידה (כדור)", k: 150, p: 3 }
 ];
 
+// Month 1: one full-body session on simple machines. From week 5: A/B split.
+const FB_WEEKS = 4;
 const EX = {
+  FB: [
+    { k: "legpress", n: "דחיקת רגליים במכונה", rep: "10–12", core: true },
+    { k: "chestpress", n: "דחיקת חזה במכונה", rep: "10–12", core: true },
+    { k: "pulldown_wide", n: "פולי עליון — אחיזה רחבה", rep: "10–12", core: true },
+    { k: "row_cable", n: "חתירה בפולי בישיבה", rep: "10–12" },
+    { k: "shoulder", n: "לחיצת כתפיים במכונה", rep: "10–12", fixedSets: 2 },
+    { k: "legcurl", n: "כפיפת ברכיים במכונה", rep: "10–12", fixedSets: 2 },
+    { k: "abs", n: "מכונת בטן", rep: "12–15", fixedSets: 2 },
+    { k: "walk", n: "סיום: הליכה בשיפוע", rep: "15–20 דק׳", cardio: true }
+  ],
   A: [
-    { k: "legpress", n: "לחיצת רגליים במכונה", rep: "10–12", core: true },
-    { k: "chestpress", n: "לחיצת חזה (מכונה / משקולות יד)", rep: "8–12", core: true },
-    { k: "pulldown", n: "משיכת פולי עליון", rep: "10–12", core: true },
-    { k: "rdl", n: "דדליפט רומני עם משקולות יד", rep: "10" },
-    { k: "lateral", n: "הרחקת כתפיים לצדדים", rep: "12–15", fixedSets: 2 },
-    { k: "plank", n: "פלאנק", rep: "30–45 שנ׳", time: true },
-    { k: "walk", n: "סיום: הליכה בשיפוע", rep: "10 דק׳", cardio: true }
+    { k: "legpress", n: "דחיקת רגליים במכונה", rep: "10–12", core: true },
+    { k: "chestpress", n: "דחיקת חזה במכונה", rep: "8–12", core: true },
+    { k: "pulldown_wide", n: "פולי עליון — אחיזה רחבה", rep: "10–12", core: true },
+    { k: "row_machine", n: "חתירה במכונה (חזה נתמך)", rep: "10–12" },
+    { k: "shoulder", n: "לחיצת כתפיים במכונה", rep: "10–12", fixedSets: 2 },
+    { k: "legext", n: "פשיטת ברכיים במכונה", rep: "12–15", fixedSets: 2 },
+    { k: "walk", n: "סיום: הליכה בשיפוע", rep: "15 דק׳", cardio: true }
   ],
   B: [
-    { k: "goblet", n: "גובלט סקוואט", rep: "8–12", core: true },
-    { k: "row", n: "חתירה בישיבה בכבל", rep: "10–12", core: true },
-    { k: "shoulder", n: "לחיצת כתפיים בישיבה", rep: "8–12", core: true },
-    { k: "legcurl", n: "כפיפת ברכיים במכונה", rep: "10–12" },
-    { k: "hipthrust", n: "גשר ישבן / היפ ת׳ראסט", rep: "10–12" },
-    { k: "deadbug", n: "דד באג", rep: "10 לכל צד", time: true },
-    { k: "bike", n: "סיום: אופניים בקצב מתון", rep: "10 דק׳", cardio: true }
+    { k: "pulldown_close", n: "פולי עליון — אחיזה צרה", rep: "10–12", core: true },
+    { k: "row_cable", n: "חתירה בפולי בישיבה", rep: "10–12", core: true },
+    { k: "legpress", n: "דחיקת רגליים במכונה", rep: "10–12", core: true },
+    { k: "incline_chest", n: "דחיקת חזה בשיפוע במכונה", rep: "10–12" },
+    { k: "legcurl", n: "כפיפת ברכיים במכונה", rep: "10–12", fixedSets: 2 },
+    { k: "abs", n: "מכונת בטן", rep: "12–15", fixedSets: 2 },
+    { k: "walk", n: "סיום: הליכה בשיפוע", rep: "15 דק׳", cardio: true }
   ]
 };
 
@@ -162,7 +174,8 @@ function weekDrinks(k = today()) { const ds = weekDays(k); return { total: ds.re
 function seasonTarget(k = today()) { const m = parseKey(k).getMonth(); return (m === 11 || m === 0 || m === 1) ? 4 : 3; }
 function workoutsThisWeek() { return weekDays().filter(d => d.workout && d.workout.done).length; }
 function lastDoneWorkout(excl) { return sortedDays().find(d => d.date !== excl && d.workout && d.workout.done); }
-function nextWorkoutType() { const l = lastDoneWorkout(today()); return l ? (l.workout.type === "A" ? "B" : "A") : "A"; }
+const isFBPhase = () => programWeek() <= FB_WEEKS;
+function nextWorkoutType() { if (isFBPhase()) return "FB"; const l = lastDoneWorkout(today()); return l && l.workout.type === "A" ? "B" : "A"; }
 function weightEntries() { return Object.entries(S.weights).map(([k, v]) => ({ k, v: +v })).filter(e => e.v > 0).sort((a, b) => a.k < b.k ? -1 : 1); }
 function avg7(es, upto) { const from = addDays(upto, -6); const xs = es.filter(e => e.k >= from && e.k <= upto); return xs.length ? xs.reduce((s, e) => s + e.v, 0) / xs.length : null; }
 function programWeek() { return Math.max(1, Math.floor(daysBetween(P().startDate, today()) / 7) + 1); }
@@ -315,13 +328,17 @@ function setsFor(ex) { if (ex.cardio) return 0; if (ex.fixedSets) return ex.fixe
 function lastSetsFor(key) { for (const d of sortedDays()) { if (d.date === today()) continue; const s = d.workout && d.workout.sets && d.workout.sets[key]; if (s && s.some(x => x && (x.kg || x.reps))) return { date: d.date, s }; } return null; }
 function renderTrain() {
   const d = day(), wk = programWeek();
-  const type = (d.workout && d.workout.type) || S.ui.pick || nextWorkoutType();
+  let type = (d.workout && d.workout.type) || S.ui.pick || nextWorkoutType();
+  if (!EX[type] || (!isFBPhase() && type === "FB" && !(d.workout && d.workout.type === "FB")) || (isFBPhase() && type !== "FB" && !(d.workout && d.workout.type === type))) type = nextWorkoutType();
   S.ui.pick = type;
   $("#pickA").setAttribute("aria-pressed", type === "A"); $("#pickB").setAttribute("aria-pressed", type === "B");
-  $("#trTitle").textContent = "אימון " + type;
+  $("#trTitle").textContent = type === "FB" ? "אימון גוף מלא" : "אימון " + type;
+  $("#trPicker").hidden = isFBPhase();
   const tw = workoutsThisWeek(), target = seasonTarget();
   $("#trWeek").className = "chip " + (tw >= target ? "good" : "plain"); $("#trWeek").innerHTML = `השבוע <span class="num">${tw}/${target}</span>`;
-  $("#trPhase").textContent = wk <= 2 ? `שבוע ${wk} בתוכנית: הסתגלות — 2 סטים, משקל שנשארות איתו עוד 3–4 חזרות.` : `שבוע ${wk}: 3 סטים, משקל שמשאיר 1–2 חזרות במאגר. הגעת לחזרות העליונות בכל הסטים? בפעם הבאה מעלים משקל.`;
+  $("#trPhase").textContent = wk <= 2 ? `שבוע ${wk}: חזרה לשגרה — גוף מלא, 2 סטים, משקל שנשארות איתו עוד 3–4 חזרות.`
+    : wk <= FB_WEEKS ? `שבוע ${wk}: גוף מלא, 3 סטים, משקל שמשאיר 1–2 חזרות במאגר. משבוע 5 עוברים ל-A ו-B.`
+    : `שבוע ${wk}: A ו-B לסירוגין, 3 סטים. הגעת לחזרות העליונות בכל הסטים? בפעם הבאה מעלים משקל.`;
   const sets = (d.workout && d.workout.type === type && d.workout.sets) || {};
   $("#exList").innerHTML = EX[type].map(ex => {
     const n = setsFor(ex), prev = lastSetsFor(ex.k);
