@@ -1,7 +1,7 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.4.1";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
@@ -388,7 +388,8 @@ function renderTrain() {
     : `שבוע ${wk}: A ו-B לסירוגין, 3 סטים. הגעת לחזרות העליונות בכל הסטים? בפעם הבאה מעלים משקל.`;
   const sets = (d.workout && d.workout.type === type && d.workout.sets) || {};
   $("#exList").innerHTML = EX[type].map(ex => {
-    const n = setsFor(ex), prev = lastSetsFor(ex.k);
+    const base = setsFor(ex), saved = (sets[ex.k] || []).length, extra = ((d.workout && d.workout.type === type && d.workout.extra) || {})[ex.k] || 0;
+    const n = ex.cardio ? 0 : Math.min(6, Math.max(base, saved, base + extra)), prev = lastSetsFor(ex.k);
     const prevTxt = prev ? prev.s.filter(x => x && (x.kg || x.reps)).map(x => `${x.kg || "–"}×${x.reps || "–"}`).join(", ") : "";
     let rows = "";
     if (n) rows = `<div class="sets"><span></span><span class="hd">${ex.time ? "תוספת משקל" : "ק״ג"}</span><span class="hd">${ex.time ? "שניות / חזרות" : "חזרות"}</span>` +
@@ -396,7 +397,7 @@ function renderTrain() {
         <input id="s-${ex.k}-${i}-kg" inputmode="decimal" data-set="${ex.k}" data-i="${i}" data-f="kg" value="${esc(s.kg ?? "")}" aria-label="${esc(ex.n)} סט ${i + 1} משקל">
         <input id="s-${ex.k}-${i}-r" inputmode="numeric" data-set="${ex.k}" data-i="${i}" data-f="reps" value="${esc(s.reps ?? "")}" aria-label="${esc(ex.n)} סט ${i + 1} חזרות">`; }).join("") + `</div>`;
     return `<div class="ex ${ex.core ? "core" : ""}"><div class="ex-h"><span class="ex-name">${esc(ex.n)}</span><span class="muted small">${n ? `<span class="num">${n}</span> × ` : ""}${esc(ex.rep)}</span></div>
-      ${prevTxt ? `<span class="muted small">פעם קודמת (${fmtDM(prev.date)}): <span class="num">${esc(prevTxt)}</span></span>` : ""}${rows}</div>`;
+      ${prevTxt ? `<span class="muted small">פעם קודמת (${fmtDM(prev.date)}): <span class="num">${esc(prevTxt)}</span></span>` : ""}${rows}${n && n < 6 ? `<button type="button" class="btn ghost sm" data-addset="${ex.k}" style="align-self:flex-start">+ סט</button>` : ""}</div>`;
   }).join("");
   const done = !!(d.workout && d.workout.done);
   $("#trDone").hidden = !done; $("#trFinish").hidden = done; $("#trUndo").hidden = !done;
@@ -529,6 +530,14 @@ $("#exList").addEventListener("input", e => {
   arr[+t.dataset.i] = { ...(arr[+t.dataset.i] || {}), [t.dataset.f]: t.value.trim() };
   for (let i = 0; i < arr.length; i++) if (!arr[i]) arr[i] = {};
   save();
+});
+$("#exList").addEventListener("click", e => {
+  const k = e.target.dataset && e.target.dataset.addset; if (!k) return;
+  const w = ensureWorkout(S.ui.pick); w.extra = w.extra || {};
+  const ex = (EX[S.ui.pick] || []).find(x => x.k === k); const base = ex ? setsFor(ex) : 2;
+  const have = Math.max(base + (w.extra[k] || 0), (w.sets[k] || []).length);
+  w.extra[k] = have + 1 - base; save(true); renderTrain();
+  const inp = document.getElementById(`s-${k}-${have}-kg`); if (inp) inp.focus();
 });
 $("#trFinish").addEventListener("click", () => { const w = ensureWorkout(S.ui.pick); w.done = true; save(true); render(); toast("אימון נרשם."); });
 $("#trUndo").addEventListener("click", () => { const d = day(); if (d.workout) { d.workout.done = false; save(); render(); } });
