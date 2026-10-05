@@ -1,7 +1,7 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
@@ -12,7 +12,8 @@ const DRINKS_WEEK = 2; // dietitian's limit
 const BODY = { sex: "m", birth: "1993-12-16", heightCm: 172 };
 const KCAL_PER_KG = 7700;     // energy in ~1 kg of body fat
 const BREAK_AT_WEEK = 12;     // suggest a 2-week maintenance break after ~12 weeks
-const STEP_KG = 5;            // re-check the target every 5 kg lost
+const STEP_KG = 5;
+const STEPS_TAG = "dor-coach:"; // clipboard format from the iPhone Shortcut: dor-coach:2026-10-05=8423            // re-check the target every 5 kg lost
 
 const FOOD_CATS = [
   { id: "fav", n: "מועדפים" },
@@ -175,6 +176,7 @@ function sortedDays() { return Object.values(S.days).sort((a, b) => a.date < b.d
 function weekDays(k = today()) { const ws = weekStart(k), we = addDays(ws, 6); return Object.values(S.days).filter(d => d.date >= ws && d.date <= we); }
 function totals(d) { let kcal = 0, prot = 0; (d.meals || []).forEach(m => { kcal += +m.kcal || 0; prot += +m.protein || 0; }); return { kcal: Math.round(kcal), prot: Math.round(prot) }; }
 function weekDrinks(k = today()) { const ds = weekDays(k); return { total: ds.reduce((s, d) => s + (d.drinks || []).length, 0), nights: ds.filter(d => (d.drinks || []).length > 0).length }; }
+function stepsGoal(k = today()) { const m = parseKey(k).getMonth(); return (m === 11 || m === 0 || m === 1) ? 8000 : 7000; }
 function seasonTarget(k = today()) { const m = parseKey(k).getMonth(); return (m === 11 || m === 0 || m === 1) ? 4 : 3; }
 function workoutsThisWeek() { return weekDays().filter(d => d.workout && d.workout.done).length; }
 function lastDoneWorkout(excl) { return sortedDays().find(d => d.date !== excl && d.workout && d.workout.done); }
@@ -322,6 +324,12 @@ function renderToday() {
   const es = weightEntries(), last = es[es.length - 1];
   $("#wLast").innerHTML = last ? `אחרון: <span class="num">${fmt1(last.v)}</span> (${fmtDM(last.k)})` : "";
   $("#wQuickVal").placeholder = last ? fmt1(last.v) : "ק״ג";
+
+  const st = d.steps || null, sg = stepsGoal(k), sv = st ? st.n : 0;
+  $("#stepsNow").textContent = sv.toLocaleString("en-US"); $("#stepsGoal").textContent = sg.toLocaleString("en-US");
+  setBar("#stepsBar", sv, sg, sv >= sg ? "good" : "");
+  $("#stepsWhen").textContent = st ? `עודכן ${st.at}` : "";
+  $("#stepsHelp").hidden = !!st;
 }
 
 function renderWeight() {
@@ -403,13 +411,14 @@ function renderWeek() {
     const k = addDays(ws, i), d = S.days[k], t = d ? totals(d) : { kcal: 0, prot: 0 };
     if (t.kcal > 0 && k <= tk) { logged++; kcalSum += t.kcal; }
     const pOk = t.prot >= TARGET.protein; if (pOk) protDays++;
-    return `<div class="wd ${k === tk ? "today" : ""}"><strong>${HEB_SHORT[i]}</strong><span class="dot ${pOk ? "g" : ""}"></span><span class="dot ${d && d.workout && d.workout.done ? "b" : ""}"></span><span class="dot ${d && (d.drinks || []).length ? "a" : ""}"></span></div>`;
+    return `<div class="wd ${k === tk ? "today" : ""}"><strong>${HEB_SHORT[i]}</strong><span class="dot ${pOk ? "g" : ""}"></span><span class="dot ${d && d.workout && d.workout.done ? "b" : ""}"></span><span class="dot ${d && (d.drinks || []).length ? "a" : ""}"></span><span class="dot ${d && d.steps && d.steps.n >= stepsGoal(k) ? "s" : ""}"></span></div>`;
   }).join("");
   const wd = weekDrinks(), tw = workoutsThisWeek(), target = seasonTarget();
   const rows = [
     ["אימונים", `${tw}/${target}`, tw >= target ? "good" : tw >= target - 1 ? "warn" : "plain"],
     ["ימים עם חלבון ביעד", `${protDays}`, protDays >= 4 ? "good" : "plain"],
     ["ממוצע קלוריות בימים שנרשמו", logged ? Math.round(kcalSum / logged).toLocaleString("en-US") : "—", logged && kcalSum / logged <= kcalGoal() * 1.05 ? "good" : "plain"],
+    ["ממוצע צעדים", (() => { const xs = weekDays().filter(x => x.steps).map(x => x.steps.n); return xs.length ? Math.round(xs.reduce((s, x) => s + x, 0) / xs.length).toLocaleString("en-US") : "—"; })(), (() => { const xs = weekDays().filter(x => x.steps).map(x => x.steps.n); return xs.length && xs.reduce((s, x) => s + x, 0) / xs.length >= stepsGoal() ? "good" : "plain"; })()],
     ["משקאות (עד 2)", `${wd.total}`, wd.total > DRINKS_WEEK ? "bad" : wd.total === DRINKS_WEEK ? "warn" : "good"]
   ];
   $("#weekStats").innerHTML = rows.map(([n, v, c]) => `<li><span>${n}</span><span class="chip ${c}"><span class="num">${v}</span></span></li>`).join("");
@@ -530,6 +539,32 @@ $("#breakBox").addEventListener("click", e => {
   if (e.target.id === "breakSkip") { S.profile.breakDone = true; save(); render(); }
   if (e.target.id === "breakEnd") { S.profile.breakUntil = addDays(today(), -1); S.profile.breakDone = true; save(); render(); }
 });
+/* steps from iPhone Health via a Shortcut that copies "dor-coach:YYYY-MM-DD=N" */
+function parseSteps(txt) {
+  const out = []; const s = String(txt || "");
+  const re = /dor-coach:\s*(\d{4}-\d{2}-\d{2})\s*=\s*([\d.,\s]+)/g; let m;
+  while ((m = re.exec(s))) { const n = Math.round(parseFloat(m[2].replace(/[\s,]/g, ""))); if (n >= 0 && n < 100000) out.push({ k: m[1], n }); }
+  if (!out.length) { const n = Math.round(parseFloat(s.replace(/[\s,]/g, ""))); if (/^[\d.,\s]+$/.test(s.trim()) && n >= 0 && n < 100000) out.push({ k: today(), n }); }
+  return out;
+}
+function applySteps(list) {
+  if (!list.length) { toast("לא מצאתי צעדים בטקסט. הרץ את הקיצור ונסה שוב."); return false; }
+  list.forEach(({ k, n }) => { day(k).steps = { n, at: nowHM() }; });
+  save(true); renderToday();
+  const t = list.find(x => x.k === today()) || list[list.length - 1];
+  toast(`נשמרו ${t.n.toLocaleString("en-US")} צעדים${t.k !== today() ? ` ל-${fmtDM(t.k)}` : ""}.`);
+  return true;
+}
+$("#stepsImport").addEventListener("click", async () => {
+  const box = $("#stepsPaste");
+  try {
+    const txt = await navigator.clipboard.readText();
+    if (applySteps(parseSteps(txt))) { box.hidden = true; box.value = ""; }
+  } catch (_) { box.hidden = false; box.focus(); toast("הדבק כאן את מה שהקיצור העתיק."); }
+});
+$("#stepsPaste").addEventListener("input", e => { const l = parseSteps(e.target.value); if (l.length && applySteps(l)) { e.target.value = ""; e.target.hidden = true; } });
+$("#stepsForm").addEventListener("submit", e => { e.preventDefault(); const n = parseInt($("#stepsVal").value); if (!(n >= 0 && n < 100000)) { toast("מספר הצעדים לא תקין."); return; } applySteps([{ k: today(), n }]); $("#stepsVal").value = ""; });
+
 /* summary for Claude */
 function summaryText() {
   const es = weightEntries(), last = es[es.length - 1];
@@ -540,7 +575,7 @@ function summaryText() {
   for (let i = 13; i >= 0; i--) {
     const k = addDays(today(), -i), d = S.days[k]; if (!d) continue;
     const t = totals(d);
-    lines.push(`${k} (${d.type === "event" ? "אירוע" : "רגיל"}): ${t.kcal} קק״ל, ${t.prot} ג׳ חלבון${(d.drinks || []).length ? `, ${d.drinks.length} משקאות` : ""}${d.workout && d.workout.done ? `, אימון ${d.workout.type}` : ""}${S.weights[k] ? `, משקל ${S.weights[k]}` : ""}`);
+    lines.push(`${k} (${d.type === "event" ? "אירוע" : "רגיל"}): ${t.kcal} קק״ל, ${t.prot} ג׳ חלבון${(d.drinks || []).length ? `, ${d.drinks.length} משקאות` : ""}${d.workout && d.workout.done ? `, אימון ${d.workout.type}` : ""}${d.steps ? `, ${d.steps.n} צעדים` : ""}${S.weights[k] ? `, משקל ${S.weights[k]}` : ""}`);
     if ((d.meals || []).length) lines.push("  אוכל: " + d.meals.map(m => `${m.time} ${m.n}`).join(" | "));
   }
   return lines.join("\n");

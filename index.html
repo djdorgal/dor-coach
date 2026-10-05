@@ -141,7 +141,7 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .wd{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0;border-radius:8px;background:var(--soft);font-size:12px}
 .wd.today{outline:2px solid var(--accent)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
-.dot.g{background:var(--good)} .dot.a{background:var(--amber)} .dot.b{background:var(--accent)}
+.dot.g{background:var(--good)} .dot.s{background:var(--muted)} .dot.a{background:var(--amber)} .dot.b{background:var(--accent)}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .rules{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px}
@@ -261,6 +261,23 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
     </div>
 
     <div class="card">
+      <div class="card-h"><h2>צעדים</h2><span class="muted small" id="stepsWhen"></span></div>
+      <div class="meter" style="background:transparent;padding:0">
+        <span><span class="big num" id="stepsNow" style="font-size:24px;font-weight:600">0</span> <span class="muted small">/ <span class="num" id="stepsGoal">7,000</span></span></span>
+        <div class="bar" id="stepsBar"><i style="width:0%"></i></div>
+      </div>
+      <div class="row">
+        <button class="btn" type="button" id="stepsImport">ייבוא מ-Health</button>
+        <form class="row grow" id="stepsForm" autocomplete="off" style="flex-wrap:nowrap">
+          <input class="input num grow" id="stepsVal" type="number" inputmode="numeric" placeholder="או להקליד" aria-label="מספר צעדים">
+          <button class="btn ghost" type="submit">שמור</button>
+        </form>
+      </div>
+      <textarea class="input small" id="stepsPaste" rows="2" placeholder="הדבק כאן את מה שהקיצור העתיק" hidden></textarea>
+      <p class="muted small" id="stepsHelp">מריצים את הקיצור "סנכרון צעדים" ואז לוחצים "ייבוא מ-Health".</p>
+    </div>
+
+    <div class="card">
       <div class="card-h"><h2>משקל הבוקר</h2><span class="muted small" id="wLast"></span></div>
       <form class="row" id="wQuick" autocomplete="off">
         <input class="input grow num" id="wQuickVal" type="number" step="0.1" inputmode="decimal" placeholder="ק״ג" aria-label="משקל בקילו">
@@ -324,7 +341,7 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
     <div class="card">
       <div class="card-h"><h2>השבוע</h2><span class="muted small" id="weekRange"></span></div>
       <div class="week" id="weekGrid"></div>
-      <div class="legend"><span><i class="dot g"></i>חלבון ביעד</span><span><i class="dot b"></i>אימון</span><span><i class="dot a"></i>שתייה</span></div>
+      <div class="legend"><span><i class="dot g"></i>חלבון ביעד</span><span><i class="dot b"></i>אימון</span><span><i class="dot a"></i>שתייה</span><span><i class="dot s"></i>צעדים ביעד</span></div>
       <ul class="milestones" id="weekStats"></ul>
     </div>
     <div class="card">
