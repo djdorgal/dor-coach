@@ -1,5 +1,5 @@
 // Bump CACHE on every release so phones pick up the new files.
-const CACHE = "dor-coach-1.5.0";
+const CACHE = "dor-coach-1.6.0";
 const SHELL = ["./", "index.html", "app.js", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => {

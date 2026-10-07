@@ -1,7 +1,7 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
@@ -62,6 +62,12 @@ const FOODS = [
   { c: "event", n: "סגירה בבית: קוטג׳ / יוגורט חלבון", k: 150, p: 20 },
   { c: "deliv", n: "פוקי עם חלבון כפול", k: 650, p: 45 },
   { c: "deliv", n: "שווארמה בצלחת + סלטים", k: 750, p: 50 },
+  { c: "deliv", n: "קערת בוריטו (בלי טורטייה)", k: 650, p: 40 },
+  { c: "deliv", n: "חצי בוריטו", k: 500, p: 20 },
+  { c: "deliv", n: "בוריטו שלם", k: 1000, p: 40 },
+  { c: "deliv", n: "חצי מנת הום פרייז מלאה (דיקסי)", k: 500, p: 10 },
+  { c: "deliv", n: "טוסט נקניק", k: 450, p: 18 },
+  { c: "deliv", n: "נקניקיית נשנוש", k: 120, p: 6 },
   { c: "deliv", n: "שיפודים + סלטים", k: 650, p: 50 },
   { c: "deliv", n: "שווארמה בלאפה", k: 1100, p: 50 },
   { c: "deliv", n: "2 משולשי פיצה", k: 560, p: 24 },
@@ -69,6 +75,8 @@ const FOODS = [
   { c: "sweet", n: "קפה עם חלב", k: 60, p: 3 },
   { c: "sweet", n: "קפה עם חלב חלבון", k: 90, p: 12 },
   { c: "sweet", n: "2 קוביות שוקולד מריר", k: 110, p: 2 },
+  { c: "sweet", n: "כדור פנקה / מתוק קטן", k: 120, p: 2 },
+  { c: "sweet", n: "מעדן חלבון", k: 150, p: 20 },
   { c: "sweet", n: "חטיף / עוגייה", k: 200, p: 3 },
   { c: "sweet", n: "גלידה (כדור)", k: 150, p: 3 }
 ];
@@ -195,20 +203,27 @@ function estimatedTDEE(w = currentWeight()) {
   const bmr = 10 * w + 6.25 * BODY.heightCm - 5 * ageYears() + 5;
   return { bmr: Math.round(bmr), low: Math.round(bmr * 1.375 / 10) * 10, high: Math.round(bmr * 1.5 / 10) * 10 };
 }
-// Measured TDEE: average logged intake + energy of the weight trend change, over the last up-to-28 days.
+// Least-squares slope of weight (kg/day) over a list of {k, v}
+function weightSlope(list) {
+  if (list.length < 2) return null;
+  const x0 = list[0].k, xs = list.map(e => daysBetween(x0, e.k)), ys = list.map(e => e.v);
+  const mx = xs.reduce((s, x) => s + x, 0) / xs.length, my = ys.reduce((s, y) => s + y, 0) / ys.length;
+  let num = 0, den = 0; xs.forEach((x, i) => { num += (x - mx) * (ys[i] - my); den += (x - mx) ** 2; });
+  return den ? num / den : null;
+}
+// Measured TDEE for weekly weigh-ins: average logged intake between the first and last weigh-in in the
+// last ~5 weeks, plus the energy of the weight trend (regression slope). Needs 3+ weigh-ins over 14+ days.
 function measuredTDEE() {
   const es = weightEntries(); if (es.length < 2) return null;
-  const end = today(), start = addDays(end, -27);
-  const days = []; for (let k = start; k <= end; k = addDays(k, 1)) { const d = S.days[k]; const t = d ? totals(d) : null; if (t && t.kcal >= 800) days.push(t.kcal); }
+  const end = today(), start = addDays(end, -35);
   const inWin = es.filter(e => e.k >= start);
-  if (inWin.length < 4) return null;
-  const first = inWin[0].k, last = inWin[inWin.length - 1].k, span = daysBetween(first, last);
-  if (span < 20 || days.length < 14) return { ready: false, loggedDays: days.length, span };
-  // two 7-day averages, centred 3 days in from each end -> they sit (span - 6) days apart
-  const w0 = avg7(es, addDays(first, 6)), w1 = avg7(es, last), gapDays = span - 6;
+  const first = inWin.length ? inWin[0].k : end, last = inWin.length ? inWin[inWin.length - 1].k : end, span = daysBetween(first, last);
+  const days = []; for (let k = first; k <= last; k = addDays(k, 1)) { const d = S.days[k]; const t = d ? totals(d) : null; if (t && t.kcal >= 800) days.push(t.kcal); }
+  if (inWin.length < 3 || span < 14 || days.length < Math.max(10, span * 0.6)) return { ready: false, loggedDays: days.length, weighIns: inWin.length, span };
+  const slope = weightSlope(inWin);              // kg per day (negative = losing)
   const avgIn = days.reduce((s, x) => s + x, 0) / days.length;
-  const tdee = Math.round((avgIn + ((w0 - w1) * KCAL_PER_KG) / gapDays) / 10) * 10;
-  return { ready: true, tdee, avgIn: Math.round(avgIn), perWeek: Math.round((w0 - w1) / gapDays * 7 * 10) / 10, loggedDays: days.length, span };
+  const tdee = Math.round((avgIn - slope * KCAL_PER_KG) / 10) * 10;
+  return { ready: true, tdee, avgIn: Math.round(avgIn), perWeek: Math.round(-slope * 7 * 10) / 10, loggedDays: days.length, weighIns: inWin.length, span };
 }
 function inBreak() { const b = P().breakUntil; return !!(b && today() <= b); }
 function maintenanceKcal() {
@@ -323,7 +338,10 @@ function renderToday() {
   $("#drinkMsg").textContent = msg; $("#drinkUndo").disabled = tonight === 0;
 
   const es = weightEntries(), last = es[es.length - 1];
-  $("#wLast").innerHTML = last ? `אחרון: <span class="num">${fmt1(last.v)}</span> (${fmtDM(last.k)})` : "";
+  const isSun = parseKey(k).getDay() === 0, weighedToday = !!S.weights[k];
+  const nextSun = isSun && !weighedToday ? k : addDays(k, 7 - parseKey(k).getDay());
+  $("#wLast").innerHTML = last ? `אחרונה: <span class="num">${fmt1(last.v)}</span> (${fmtDM(last.k)})` : "";
+  $("#wNext").textContent = weighedToday ? "השקילה של היום נרשמה." : isSun ? "היום יום שקילה — בבוקר, אחרי שירותים ולפני אוכל." : `השקילה הבאה: יום ראשון ${fmtDM(nextSun)}, בבוקר.`;
   $("#wQuickVal").placeholder = last ? fmt1(last.v) : "ק״ג";
 
   const st = d.steps || null, sg = stepsGoal(k), sv = st ? st.n : 0;
@@ -341,7 +359,7 @@ function renderWeight() {
   const delta = a != null && start ? a - start : null;
   $("#sDelta").textContent = delta == null ? "—" : (delta > 0 ? "+" : "") + fmt1(delta);
   let pace = "ממוצע";
-  if (last && es.length > 3) { const prev = avg7(es, addDays(last.k, -14)); if (prev) { const pw = (a - prev) / 2; pace = pw <= -0.3 ? `${fmt1(-pw)}- ק״ג לשבוע` : pw < 0.1 ? "יציב" : "עולה"; } }
+  if (es.length >= 3) { const sl = weightSlope(es.slice(-4)); if (sl != null) { const pw = sl * 7; pace = pw <= -0.2 ? `${fmt1(-pw)}- ק״ג לשבוע` : pw < 0.1 ? "יציב" : "עולה"; } }
   $("#wPace").textContent = pace;
   $("#chart").innerHTML = chartSVG(es, gr);
   const cur = a ?? (last ? last.v : start);
@@ -433,12 +451,12 @@ function renderEnergy() {
   let html = "";
   if (m && m.ready) {
     html += `<p><strong>לפי הנתונים שלך: כ-<span class="num">${m.tdee.toLocaleString("en-US")}</span> קק״ל ביום.</strong></p>
-      <p class="small muted">ב-${m.span} הימים האחרונים אכלת בממוצע <span class="num">${m.avgIn.toLocaleString("en-US")}</span> קק״ל (${m.loggedDays} ימים רשומים) והממוצע שלך ירד <span class="num">${m.perWeek}</span> ק״ג לשבוע.</p>`;
+      <p class="small muted">ב-${m.span} ימים (${m.weighIns} שקילות) אכלת בממוצע <span class="num">${m.avgIn.toLocaleString("en-US")}</span> קק״ל (${m.loggedDays} ימים רשומים) והמשקל ירד בקצב של <span class="num">${m.perWeek}</span> ק״ג לשבוע.</p>`;
     const gap = m.tdee - TARGET.kcal;
     html += `<p class="small">${m.perWeek > 1.1 ? "יורד מהר מהיעד (מעל 1 ק״ג בשבוע). אם אתה חלש או רעב כל הזמן — שווה לבדוק עם רחלי העלאה קטנה." : m.perWeek < 0.3 ? "הירידה איטית מהיעד. קודם לבדוק שהרישום מלא (גם שתייה ונשנושים), ורק אז לשנות." : `קצב טוב. הגירעון שלך כ-${gap.toLocaleString("en-US")} קק״ל ביום.`}</p>`;
   } else if (e) {
     html += `<p><strong>הערכה: <span class="num">${e.low.toLocaleString("en-US")}–${e.high.toLocaleString("en-US")}</span> קק״ל ביום.</strong></p>
-      <p class="small muted">לפי נוסחה (שריפה במנוחה כ-<span class="num">${e.bmr.toLocaleString("en-US")}</span> × פעילות). ${m ? `אחרי 3 שבועות עם 14 ימים רשומים יופיע כאן חישוב מהנתונים שלך — עכשיו ${m.loggedDays} ימים.` : "אחרי 3 שבועות של רישום ושקילות יופיע כאן חישוב מהנתונים שלך."}</p>`;
+      <p class="small muted">לפי נוסחה (שריפה במנוחה כ-<span class="num">${e.bmr.toLocaleString("en-US")}</span> × פעילות). ${m ? `אחרי 3 שקילות שבועיות ורישום רוב הימים יופיע כאן חישוב מהנתונים שלך — עכשיו ${m.weighIns || 1} שקילות ו-${m.loggedDays} ימים רשומים.` : "אחרי 3 שקילות שבועיות ורישום רוב הימים יופיע כאן חישוב מהנתונים שלך."}</p>`;
   }
   $("#energyBody").innerHTML = html;
 
@@ -478,7 +496,7 @@ document.querySelectorAll(".top .seg button").forEach(b => b.addEventListener("c
 $("#installHide").addEventListener("click", () => { S.ui.installHidden = true; save(); render(); });
 
 $("#obForm").addEventListener("submit", e => {
-  e.preventDefault(); const v = parseFloat($("#obWeight").value);
+  e.preventDefault(); const v = parseKg($("#obWeight").value);
   if (!(v > 30 && v < 250)) { toast("המשקל נראה לא תקין."); return; }
   S.profile = { startWeight: Math.round(v * 10) / 10, startDate: today() };
   S.weights[today()] = S.profile.startWeight; save(true); render(); toast("יצאנו לדרך.");
@@ -511,14 +529,15 @@ $("#sched").addEventListener("change", e => { const id = e.target.dataset.check;
 $("#drinkAdd").addEventListener("click", () => { const d = day(); d.drinks = [...(d.drinks || []), nowHM()]; save(); renderToday(); const h = new Date().getHours(); if (h < DAY_START) toast("אחרי חצות — זה הזמן לעבור למים."); });
 $("#drinkUndo").addEventListener("click", () => { const d = day(); d.drinks = (d.drinks || []).slice(0, -1); save(); renderToday(); });
 
+function parseKg(s) { const t = String(s || "").replace(/[\u200e\u200f\s]/g, "").replace(",", ".").replace(/[^\d.]/g, ""); return parseFloat(t); }
 function saveWeight(k, v) {
   if (!(v > 30 && v < 250)) { toast("המשקל נראה לא תקין. בדוק שוב."); return false; }
   S.weights[k] = Math.round(v * 10) / 10;
   if (!S.profile) S.profile = { startWeight: S.weights[k], startDate: k };
   save(true); return true;
 }
-$("#wQuick").addEventListener("submit", e => { e.preventDefault(); if (saveWeight(today(), parseFloat($("#wQuickVal").value))) { $("#wQuickVal").value = ""; toast("נשמר."); render(); } });
-$("#wForm").addEventListener("submit", e => { e.preventDefault(); if (saveWeight($("#wDate").value || today(), parseFloat($("#wVal").value))) { $("#wVal").value = ""; toast("נשמר."); render(); } });
+$("#wQuick").addEventListener("submit", e => { e.preventDefault(); if (saveWeight(today(), parseKg($("#wQuickVal").value))) { $("#wQuickVal").value = ""; toast("נשמר."); render(); } });
+$("#wForm").addEventListener("submit", e => { e.preventDefault(); if (saveWeight($("#wDate").value || today(), parseKg($("#wVal").value))) { $("#wVal").value = ""; toast("נשמר."); render(); } });
 $("#wHist").addEventListener("click", e => { const k = e.target.dataset.delW; if (!k) return; const v = S.weights[k]; delete S.weights[k]; save(); render(); toast("נמחק.", "בטל", () => { S.weights[k] = v; save(); render(); }); });
 
 function ensureWorkout(type) { const d = day(); if (!d.workout || d.workout.type !== type) d.workout = { type, sets: {}, done: false }; return d.workout; }
@@ -574,6 +593,29 @@ $("#stepsImport").addEventListener("click", async () => {
 });
 $("#stepsPaste").addEventListener("input", e => { const l = parseSteps(e.target.value); if (l.length && applySteps(l)) { e.target.value = ""; e.target.hidden = true; } });
 $("#stepsForm").addEventListener("submit", e => { e.preventDefault(); const n = parseInt($("#stepsVal").value); if (!(n >= 0 && n < 100000)) { toast("מספר הצעדים לא תקין."); return; } applySteps([{ k: today(), n }]); $("#stepsVal").value = ""; });
+
+/* Updates from Claude: pasted lines like
+   dor-coach:meal:2026-10-05:17:00=סנדוויץ' ביניים|330|18
+   dor-coach:weight:2026-10-07=99                                  */
+function importFromClaude(txt) {
+  const clean = String(txt || "").replace(/[\u200e\u200f]/g, "");
+  let meals = 0, weights = 0, skipped = 0;
+  clean.split(/\r?\n/).forEach(line => {
+    let m = line.match(/dor-coach:meal:(\d{4}-\d{2}-\d{2}):(\d{1,2}:\d{2})=(.+?)\|\s*(\d+)\s*\|\s*(\d+)/);
+    if (m) {
+      const [, k, time, n, kc, pr] = m, d = day(k);
+      if (d.meals.some(x => x.n === n.trim() && x.time === time)) { skipped++; return; }
+      d.meals.push({ time, n: n.trim(), kcal: +kc, protein: +pr }); d.meals.sort((x, y) => x.time < y.time ? -1 : 1); meals++; return;
+    }
+    m = line.match(/dor-coach:weight:(\d{4}-\d{2}-\d{2})=([\d.,]+)/);
+    if (m) { const v = parseKg(m[2]); if (v > 30 && v < 250) { S.weights[m[1]] = Math.round(v * 10) / 10; weights++; } }
+  });
+  if (!meals && !weights) { toast(skipped ? "הכל כבר רשום." : "לא מצאתי עדכונים בטקסט."); return; }
+  save(true); render();
+  const parts = []; if (meals) parts.push(`${meals} מנות`); if (weights) parts.push(`${weights} שקילות`);
+  toast(`עודכן: ${parts.join(" ו-")}${skipped ? ` (${skipped} מנות כבר היו רשומות)` : ""}.`);
+}
+$("#claudeImport").addEventListener("click", () => { importFromClaude($("#claudeBox").value); $("#claudeBox").value = ""; });
 
 /* summary for Claude */
 function summaryText() {

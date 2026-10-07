@@ -183,7 +183,7 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
     <h2 class="h2">מתחילים</h2>
     <p>כמה אתה שוקל היום? זו נקודת ההתחלה שממנה האפליקציה מחשבת את יעדי הכבד (5%, 7%, 10%).</p>
     <form class="row" id="obForm" autocomplete="off">
-      <input class="input grow num" id="obWeight" type="number" step="0.1" inputmode="decimal" placeholder="ק״ג" aria-label="משקל התחלתי" required>
+      <input class="input grow num" id="obWeight" type="text" inputmode="decimal" autocomplete="off" placeholder="ק״ג" aria-label="משקל התחלתי" required>
       <button class="btn" type="submit">יאללה</button>
     </form>
   </section>
@@ -278,9 +278,10 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
     </div>
 
     <div class="card">
-      <div class="card-h"><h2>משקל הבוקר</h2><span class="muted small" id="wLast"></span></div>
+      <div class="card-h"><h2>שקילה שבועית</h2><span class="muted small" id="wLast"></span></div>
+      <p class="small" id="wNext"></p>
       <form class="row" id="wQuick" autocomplete="off">
-        <input class="input grow num" id="wQuickVal" type="number" step="0.1" inputmode="decimal" placeholder="ק״ג" aria-label="משקל בקילו">
+        <input class="input grow num" id="wQuickVal" type="text" inputmode="decimal" autocomplete="off" placeholder="ק״ג" aria-label="משקל בקילו">
         <button class="btn" type="submit">שמור</button>
       </form>
     </div>
@@ -296,7 +297,7 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
         <div class="stat"><span class="eyebrow">מאז ההתחלה</span><span class="v num" id="sDelta">—</span></div>
       </div>
       <div class="chart" id="chart"></div>
-      <p class="muted small">הנקודות הן שקילות, הקו הוא ממוצע 7 ימים. מסתכלים על הקו — המשקל היומי קופץ ממים, מלח ושינה.</p>
+      <p class="muted small">שוקלים פעם בשבוע, ביום ראשון בבוקר, באותם תנאים. בין שבוע לשבוע המשקל יכול לקפוץ בחצי קילו או יותר ממים ומלח — מה שחשוב זה הכיוון לאורך כמה שבועות.</p>
     </div>
     <div class="card">
       <h2 class="h2">יעדי הכבד</h2>
@@ -306,7 +307,7 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
       <h2 class="h2">רישום</h2>
       <form class="row" id="wForm" autocomplete="off">
         <input class="input" style="flex:1.2" id="wDate" type="date" aria-label="תאריך">
-        <input class="input num" style="flex:1" id="wVal" type="number" step="0.1" inputmode="decimal" placeholder="ק״ג" aria-label="משקל">
+        <input class="input num" style="flex:1" id="wVal" type="text" inputmode="decimal" autocomplete="off" placeholder="ק״ג" aria-label="משקל">
         <button class="btn" type="submit">שמור</button>
       </form>
       <ul class="hist" id="wHist"></ul>
@@ -367,6 +368,12 @@ details.custom .body{display:flex;flex-direction:column;gap:8px;margin-top:10px}
         <li>אימונים: 3 בשבוע (4 בדצמבר–פברואר), רק מכונות. חודש ראשון גוף מלא, אחר כך A ו-B לסירוגין. בלי ריצה — הליכה.</li>
         <li>מפספסים? לא פעמיים ברצף. חוזרים לתוכנית בארוחה או באימון הבאים.</li>
       </ol>
+    </div>
+    <div class="card">
+      <h2 class="h2">עדכון מ-Claude</h2>
+      <p class="small muted">כש-Claude שולח קוד שמתחיל ב-dor-coach, מדביקים אותו כאן — והוא מוסיף אוכל או שקילות לימים הנכונים.</p>
+      <textarea class="input small" id="claudeBox" rows="4" dir="ltr" placeholder="dor-coach:meal:..."></textarea>
+      <button class="btn" type="button" id="claudeImport" style="align-self:flex-start">הוסף</button>
     </div>
     <div class="card">
       <h2 class="h2">גיבוי</h2>
