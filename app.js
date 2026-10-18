@@ -1,7 +1,7 @@
 "use strict";
 /* המאמן של דור — local-first PWA. All data lives in localStorage on the phone. */
 
-const APP_VERSION = "1.6.2";
+const APP_VERSION = "1.6.3";
 const STORE_KEY = "dor-coach-v1";
 const DAY_START = 5; // the day flips at 05:00
 
@@ -219,7 +219,8 @@ function weightSlope(list) {
 // last ~5 weeks, plus the energy of the weight trend (regression slope). Needs 3+ weigh-ins over 14+ days.
 function measuredTDEE() {
   const es = weightEntries(); if (es.length < 2) return null;
-  const end = today(), start = addDays(end, -35);
+  // Skip the first 14 days: early loss is mostly water/glycogen and inflates the result.
+  const end = today(), start = [addDays(end, -35), addDays(es[0].k, 14)].sort()[1];
   const inWin = es.filter(e => e.k >= start);
   const first = inWin.length ? inWin[0].k : end, last = inWin.length ? inWin[inWin.length - 1].k : end, span = daysBetween(first, last);
   const days = []; for (let k = first; k <= last; k = addDays(k, 1)) { const d = S.days[k]; const t = d ? totals(d) : null; if (t && t.kcal >= 800) days.push(t.kcal); }
@@ -460,7 +461,7 @@ function renderEnergy() {
     html += `<p class="small">${m.perWeek > 1.1 ? "יורד מהר מהיעד (מעל 1 ק״ג בשבוע). אם אתה חלש או רעב כל הזמן — שווה לבדוק עם רחלי העלאה קטנה." : m.perWeek < 0.3 ? "הירידה איטית מהיעד. קודם לבדוק שהרישום מלא (גם שתייה ונשנושים), ורק אז לשנות." : `קצב טוב. הגירעון שלך כ-${gap.toLocaleString("en-US")} קק״ל ביום.`}</p>`;
   } else if (e) {
     html += `<p><strong>הערכה: <span class="num">${e.low.toLocaleString("en-US")}–${e.high.toLocaleString("en-US")}</span> קק״ל ביום.</strong></p>
-      <p class="small muted">לפי נוסחה (שריפה במנוחה כ-<span class="num">${e.bmr.toLocaleString("en-US")}</span> × פעילות). ${m ? `אחרי 3 שקילות שבועיות ורישום רוב הימים יופיע כאן חישוב מהנתונים שלך — עכשיו ${m.weighIns || 1} שקילות ו-${m.loggedDays} ימים רשומים.` : "אחרי 3 שקילות שבועיות ורישום רוב הימים יופיע כאן חישוב מהנתונים שלך."}</p>`;
+      <p class="small muted">לפי נוסחה (שריפה במנוחה כ-<span class="num">${e.bmr.toLocaleString("en-US")}</span> × פעילות). ${m ? `החישוב מהנתונים שלך מתחיל אחרי השבועיים הראשונים (בהם יורדים בעיקר מים), כשיש 3 שקילות שבועיות ורישום של רוב הימים — עכשיו ${m.weighIns || 0} שקילות שנספרות.` : "אחרי 3 שקילות שבועיות ורישום רוב הימים יופיע כאן חישוב מהנתונים שלך."}</p>`;
   }
   $("#energyBody").innerHTML = html;
 
